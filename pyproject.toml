@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ngp-baseline-torch"
+version = "1.0.0"
+description = "Minimal decoupled Instant-NGP PyTorch baseline"
+requires-python = ">=3.13"
+dependencies = [
+    "torch>=2.5.0",
+    "numpy>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-xdist>=3.5.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "quick: tests that run in < 60s",
+    "slow: tests that may take several minutes",
+    "perf: performance benchmarks requiring GPU",
+]
+

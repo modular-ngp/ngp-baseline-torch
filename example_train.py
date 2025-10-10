@@ -123,6 +123,7 @@ def train_nerf(scene: str = "lego", num_iters: int = 10000):
 
     # 添加训练统计
     best_psnr = 0.0
+    best_render_psnr = 0.0  # 基于完整渲染的PSNR
     losses = []
     psnrs = []
 
@@ -198,13 +199,36 @@ def train_nerf(scene: str = "lego", num_iters: int = 10000):
                     occupancy_grid=occ_grid
                 )
 
+                # 计算渲染图像的真实PSNR（与ground truth对比）
+                if gt_image is not None:
+                    # 调整ground truth到相同分辨率
+                    gt_resized = torch.nn.functional.interpolate(
+                        torch.from_numpy(gt_image).permute(2, 0, 1).unsqueeze(0).to(device),
+                        size=(render_H, render_W),
+                        mode='bilinear',
+                        align_corners=False
+                    )
+                    gt_resized = gt_resized.squeeze(0).permute(1, 2, 0)
+
+                    # 计算MSE和PSNR
+                    mse_render = torch.mean((rendered_image - gt_resized) ** 2).item()
+                    render_psnr = -10.0 * torch.log10(torch.tensor(mse_render + 1e-8)).item()
+
+                    if render_psnr > best_render_psnr:
+                        best_render_psnr = render_psnr
+
+                    print(f"  → Render PSNR: {render_psnr:.2f} dB (best: {best_render_psnr:.2f} dB)")
+
             # 转换为numpy并保存
             img_np = rendered_image.cpu().numpy()
             img_np = np.clip(img_np, 0, 1)
             img_pil = Image.fromarray((img_np * 255).astype(np.uint8))
 
-            # 保存图像
-            output_path = render_dir / f"iter_{iteration + 1:06d}_psnr_{metrics['psnr']:.2f}dB.png"
+            # 保存图像，文件名包含渲染PSNR
+            if gt_image is not None:
+                output_path = render_dir / f"iter_{iteration + 1:06d}_psnr_{render_psnr:.2f}dB.png"
+            else:
+                output_path = render_dir / f"iter_{iteration + 1:06d}.png"
             img_pil.save(output_path)
             print(f"  → Saved to {output_path}")
 

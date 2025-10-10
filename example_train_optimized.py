@@ -3,7 +3,7 @@ import torch
 from pathlib import Path
 from ngp_baseline_torch.config import Config
 from ngp_baseline_torch.factory import create_all, create_optimizer
-from ngp_baseline_torch.rays import load_nerf_synthetic
+from ngp_baseline_torch.rays import estimate_scene_aabb, load_nerf_synthetic
 from ngp_baseline_torch.runtime import Trainer, render_image
 from ngp_baseline_torch.rng import seed_everything
 from ngp_baseline_torch.device import optimize_cuda
@@ -54,22 +54,26 @@ def train_nerf(scene: str = "lego", num_iters: int = 30000):
     # Precision - enable AMP for speed
     cfg.precision.use_amp = True
 
-    # Initialize logger
+    # Load cameras early so we can adapt scene bounds before constructing the model
+    scene_path = Path(cfg.dataset.root) / cfg.dataset.scene
+    cameras = load_nerf_synthetic(scene_path, cfg.dataset.train_split)
+    cfg.dataset.aabb = estimate_scene_aabb(cameras, margin=0.1)
+
+    # Initialize logger with updated configuration
     log_dir = Path("outputs") / scene / "logs"
     logger = NGPLogger(log_dir, cfg, run_name=f"{scene}_{num_iters}iters_optimized")
 
     logger.log_system_info()
     logger.log_complete_config()
+    logger.logger.info(f"Scene bounds (AABB) estimated from cameras: {cfg.dataset.aabb}")
 
     # Seed for reproducibility (but not deterministic mode)
     seed_everything(cfg.train.seed, deterministic=False)
     if device.type == 'cuda':
         optimize_cuda()
 
-    # Load dataset
-    scene_path = Path(cfg.dataset.root) / cfg.dataset.scene
+    # Cameras are already loaded, move poses to target device
     logger.logger.info(f"Loading scene from {scene_path}")
-    cameras = load_nerf_synthetic(scene_path, cfg.dataset.train_split)
     cameras.poses = cameras.poses.to(device)
     n_cameras = cameras.N
     logger.logger.info(f"Loaded {n_cameras} training cameras")

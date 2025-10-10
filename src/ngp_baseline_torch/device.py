@@ -39,13 +39,12 @@ def setup_device(cfg: PrecisionConfig, prefer_cuda: bool = True) -> tuple[torch.
 def optimize_cuda() -> None:
     """Enable CUDA optimizations for modern GPUs."""
     if torch.cuda.is_available():
-        # Enable TF32 for matmul on Ampere+ GPUs
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
+        # Enable TF32 for matmul on Ampere+ GPUs (PyTorch 2.9+ API)
+        torch.backends.cuda.matmul.fp32_precision = 'tf32'
+        torch.backends.cudnn.conv.fp32_precision = 'tf32'
 
         # Enable cudnn benchmarking for optimal convolution algorithms
         torch.backends.cudnn.benchmark = True
 
         # Use deterministic algorithms when needed (set per config)
         # torch.use_deterministic_algorithms(True)
-

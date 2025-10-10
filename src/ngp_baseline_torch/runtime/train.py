@@ -41,7 +41,7 @@ def train_step(
 
     # Forward pass with optional AMP
     if cfg.precision.use_amp and scaler is not None:
-        with torch.cuda.amp.autocast(dtype=torch.float16):
+        with torch.amp.autocast('cuda', dtype=torch.float16):
             pred_rgb, aux = integrator_render_batch(
                 rays=rays,
                 encoder=encoder,
@@ -146,4 +146,3 @@ class Trainer:
 
         self.step_count += 1
         return metrics
-

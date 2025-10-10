@@ -74,7 +74,7 @@ def compose_with_early_stop(
     Returns:
         rgb_out: Composited RGB [N, 3]
         T_out: Final transmittance [N]
-        stop_mask: Boolean mask [N, S] indicating stopped samples
+        stop_mask: Boolean mask [N, S] indicating stopped samples (True where stopped)
     """
     N, S = sigma_steps.shape
     device = sigma_steps.device
@@ -91,11 +91,17 @@ def compose_with_early_stop(
     T = torch.ones(N, device=device, dtype=sigma_steps.dtype)
     stop_mask = torch.zeros(N, S, device=device, dtype=torch.bool)
 
+    # Track which rays have stopped
+    ray_stopped = torch.zeros(N, device=device, dtype=torch.bool)
+
     # Sequential accumulation with early stopping
     for s in range(S):
-        # Check if we should stop
-        active = T > T_threshold
+        # Check if we should continue (T > threshold and not already stopped)
+        active = (T > T_threshold) & (~ray_stopped)
+
         if not active.any():
+            # All rays stopped, mark remaining samples as stopped
+            stop_mask[:, s:] = True
             break
 
         # Compute weights for active rays
@@ -107,8 +113,12 @@ def compose_with_early_stop(
         # Update transmittance
         T = T * (1.0 - alpha[:, s])
 
-        # Mark stopped samples
-        stop_mask[:, s] = ~active
+        # Update stopped status: rays that just went below threshold
+        newly_stopped = (T <= T_threshold) & (~ray_stopped)
+        ray_stopped = ray_stopped | newly_stopped
+
+        # Mark this sample as stopped for rays that have stopped
+        stop_mask[:, s] = ray_stopped
 
     # Add white background
     rgb_out = rgb_out + T.unsqueeze(-1)
@@ -129,4 +139,3 @@ def composite_test(sigma: torch.Tensor, rgb: torch.Tensor, dt: float) -> torch.T
     """
     rgb_out, _ = compose(sigma, rgb, dt, T_threshold=0.0)
     return rgb_out
-

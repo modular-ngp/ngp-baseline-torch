@@ -61,7 +61,8 @@ def create_field(cfg: Config, encoder: nn.Module, device) -> nn.Module:
         num_layers=cfg.model.mlp_depth,
         output_dim=16,  # RGB feature dimension
         activation=cfg.model.activation,
-        bias=True
+        bias=True,
+        density_activation=cfg.model.density_activation
     )
 
     return field.to(device)

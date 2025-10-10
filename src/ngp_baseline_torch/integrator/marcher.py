@@ -114,7 +114,7 @@ class RayMarcher(nn.Module):
         return rgb_out, aux
 
     def _sample_fixed_steps(self, rays: RayBatch) -> tuple[torch.Tensor, float]:
-        """Sample uniformly spaced steps along rays.
+        """Sample uniformly spaced steps along rays with optional jittering.
 
         Args:
             rays: Ray batch
@@ -130,6 +130,15 @@ class RayMarcher(nn.Module):
         # Linear spacing from tmin to tmax
         t_samples = torch.linspace(0, 1, S, device=device, dtype=torch.float32)
         t_samples = rays.tmin.unsqueeze(-1) + t_samples.unsqueeze(0) * (rays.tmax - rays.tmin).unsqueeze(-1)
+
+        # Add random jittering during training (CRITICAL for anti-aliasing and smoothness)
+        if self.training and self.cfg.perturb:
+            # Add uniform random noise within each bin
+            dt = (rays.tmax - rays.tmin).mean().item() / S
+            noise = torch.rand_like(t_samples) * dt * 0.5  # jitter by half step size
+            t_samples = t_samples + noise
+            # Clamp to valid range
+            t_samples = torch.clamp(t_samples, rays.tmin.unsqueeze(-1), rays.tmax.unsqueeze(-1))
 
         # Compute step size
         dt = (rays.tmax - rays.tmin).mean().item() / S

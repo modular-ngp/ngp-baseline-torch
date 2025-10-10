@@ -53,8 +53,9 @@ class HashGridEncoder(nn.Module):
             res = resolutions[level].item()
             grid_size = min(res ** 3, self.hashmap_size)
 
-            # Initialize with small random values
-            table = nn.Parameter(torch.randn(grid_size, features_per_level) * 1e-4)
+            # Initialize with very small uniform values (CRITICAL for Instant-NGP)
+            # Original paper uses uniform [-1e-4, 1e-4]
+            table = nn.Parameter(torch.empty(grid_size, features_per_level).uniform_(-1e-4, 1e-4))
             self.hash_tables.append(table)
 
         # Output dimension (padded)
@@ -187,4 +188,3 @@ def encode(xyz: torch.Tensor, state: HashGridEncoder) -> EncodedFeat:
         EncodedFeat with encoded features
     """
     return state(xyz)
-

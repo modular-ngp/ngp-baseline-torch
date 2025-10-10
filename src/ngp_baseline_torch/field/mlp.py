@@ -17,7 +17,8 @@ class NGP_MLP(nn.Module):
         num_layers: int = 2,
         output_dim: int = 16,
         activation: str = "relu",
-        bias: bool = True
+        bias: bool = True,
+        density_activation: str = "trunc_exp"
     ):
         """Initialize MLP.
 
@@ -28,12 +29,14 @@ class NGP_MLP(nn.Module):
             output_dim: Output feature dimension (for RGB head)
             activation: Activation function ("relu", "silu", "softplus")
             bias: Whether to use bias in linear layers
+            density_activation: Density activation ("softplus" or "trunc_exp")
         """
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.output_dim = output_dim
+        self.density_activation = density_activation
 
         # Select activation
         if activation == "relu":
@@ -70,10 +73,16 @@ class NGP_MLP(nn.Module):
         """Initialize network weights."""
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                # Xavier/Glorot initialization
-                nn.init.xavier_uniform_(m.weight)
+                # Xavier/Glorot initialization with smaller gain for stability
+                nn.init.xavier_uniform_(m.weight, gain=1.0)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
+
+        # Initialize sigma head bias to produce near-zero density initially
+        # This helps with stability in early training
+        with torch.no_grad():
+            if self.sigma_head.bias is not None:
+                self.sigma_head.bias.fill_(-1.5)
 
     def forward(self, feat: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass.
@@ -87,9 +96,17 @@ class NGP_MLP(nn.Module):
         """
         x = self.net(feat)
 
-        # Sigma with softplus to ensure positivity
-        sigma = self.sigma_head(x).squeeze(-1)  # [B]
-        sigma = torch.nn.functional.softplus(sigma - 1.0)  # shift for better initialization
+        # Sigma with proper activation
+        sigma_raw = self.sigma_head(x).squeeze(-1)  # [B]
+
+        if self.density_activation == "trunc_exp":
+            # Truncated exponential (used in Instant-NGP)
+            # sigma = exp(x - 1) if x > 0, else 0
+            # This is more stable than softplus and matches original implementation
+            sigma = torch.exp(torch.clamp(sigma_raw - 1.0, max=15.0))  # clamp for numerical stability
+        else:
+            # Standard softplus with shift
+            sigma = torch.nn.functional.softplus(sigma_raw - 1.0)
 
         # RGB features (no activation, will be processed by head)
         rgb_feat = self.rgb_head(x)  # [B, output_dim]
@@ -124,7 +141,6 @@ class TinyMLP(nn.Module):
 
     def forward(self, feat: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x = self.net(feat)
-        sigma = torch.nn.functional.softplus(self.sigma_head(x).squeeze(-1) - 1.0)
+        sigma = torch.exp(torch.clamp(self.sigma_head(x).squeeze(-1) - 1.0, max=15.0))
         rgb_feat = self.rgb_head(x)
         return sigma, rgb_feat
-

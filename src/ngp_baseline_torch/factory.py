@@ -1,5 +1,6 @@
 """Factory for creating model components from configuration."""
 from __future__ import annotations
+import torch
 import torch.nn as nn
 from .config import Config
 from .encoder.pe import PositionalEncoder
@@ -123,15 +124,27 @@ def create_all(cfg: Config, device) -> tuple[nn.Module, nn.Module, nn.Module, Oc
 
 
 def create_optimizer(encoder: nn.Module, field: nn.Module, rgb_head: nn.Module, cfg: Config):
-    """Create optimizer for all trainable parameters.
+    """Create optimizer with separate learning rates for encoder and MLP.
 
     Args:
         encoder, field, rgb_head: Model components
         cfg: Configuration
 
     Returns:
-        Optimizer
+        Optimizer with parameter groups
     """
-    params = list(encoder.parameters()) + list(field.parameters()) + list(rgb_head.parameters())
-    return make_optimizer(nn.ParameterList(params), cfg.train)
+    # Separate parameter groups with different learning rates
+    param_groups = [
+        {'params': encoder.parameters(), 'lr': cfg.train.lr_encoder, 'name': 'encoder'},
+        {'params': field.parameters(), 'lr': cfg.train.lr_mlp, 'name': 'field'},
+        {'params': rgb_head.parameters(), 'lr': cfg.train.lr_mlp, 'name': 'rgb_head'},
+    ]
 
+    optimizer = torch.optim.Adam(
+        param_groups,
+        betas=cfg.train.betas,
+        eps=cfg.train.eps,
+        weight_decay=cfg.train.weight_decay
+    )
+
+    return optimizer

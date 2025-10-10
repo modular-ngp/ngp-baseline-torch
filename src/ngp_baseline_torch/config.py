@@ -13,6 +13,7 @@ class DatasetConfig:
     test_split: str = "transforms_test.json"
     scale: float = 1.0
     aabb: tuple[float, float, float, float, float, float] = (-1.5, -1.5, -1.5, 1.5, 1.5, 1.5)
+    white_background: bool = True  # Use white background for NeRF-Synthetic
 
 
 @dataclass
@@ -26,7 +27,7 @@ class ModelConfig:
     mlp_width: int = 64
     mlp_depth: int = 2
     activation: str = "relu"
-    view_dependent: bool = False
+    view_dependent: bool = True  # CRITICAL: Enable view-dependent colors
     pe_viewdir_bands: int = 4
 
 
@@ -34,9 +35,9 @@ class ModelConfig:
 class IntegratorConfig:
     """Volume integration configuration."""
     step_strategy: str = "fixed"  # "fixed" or "grid"
-    n_steps_fixed: int = 128
-    sigma_thresh: float = 0.0
-    early_stop_T: float = 1e-4
+    n_steps_fixed: int = 64  # Reduced from 128 for speed
+    sigma_thresh: float = 0.01  # Enable early stopping
+    early_stop_T: float = 1e-4  # Enable early stopping
     dt_gamma: float = 0.0  # for adaptive step size
 
 
@@ -48,29 +49,31 @@ class GridConfig:
     threshold: float = 0.01
     update_every: int = 16
     warmup_steps: int = 256
-    levels: int = 1
+    levels: int = 4  # Multi-level occupancy grid (was 1)
 
 
 @dataclass
 class PrecisionConfig:
     """Precision and mixed precision configuration."""
-    param_dtype: str = "float32"  # "float16" or "float32"
-    compute_dtype: str = "float32"  # "float16" or "float32"
+    param_dtype: str = "float32"
+    compute_dtype: str = "float32"
     accum_dtype: str = "float32"
-    use_amp: bool = False
+    use_amp: bool = True  # Enable AMP by default
 
 
 @dataclass
 class TrainConfig:
     """Training configuration."""
-    batch_rays: int = 4096
-    lr: float = 1e-2
+    batch_rays: int = 8192  # Increased from 4096
+    lr: float = 1e-2  # Base learning rate
+    lr_encoder: float = 1e-2  # Separate LR for encoder
+    lr_mlp: float = 1e-3  # Separate LR for MLP (lower)
     betas: tuple[float, float] = (0.9, 0.99)
     weight_decay: float = 1e-6
     eps: float = 1e-15
     iters: int = 20000
     seed: int = 1337
-    deterministic: bool = True
+    deterministic: bool = False  # Disable for speed
     val_every: int = 1000
     log_every: int = 100
 
@@ -84,4 +87,3 @@ class Config:
     grid: GridConfig = field(default_factory=GridConfig)
     precision: PrecisionConfig = field(default_factory=PrecisionConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
-

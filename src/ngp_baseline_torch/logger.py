@@ -378,7 +378,8 @@ class NGPLogger:
             if len(weights) > 0:
                 weight_norms = [w.norm().item() for w in weights]
                 weight_means = [w.mean().item() for w in weights]
-                weight_stds = [w.std().item() for w in weights]
+                # Fix NaN issue: use unbiased=False for single-element tensors
+                weight_stds = [w.std(unbiased=False).item() if w.numel() > 1 else 0.0 for w in weights]
 
                 self.logger.debug(f"  {name}:")
                 self.logger.debug(f"    Mean Weight Norm: {sum(weight_norms)/len(weight_norms):.6e}")
@@ -433,4 +434,3 @@ class NGPLogger:
         if 'transmittance' in aux:
             T = aux['transmittance']
             self.logger.debug(f"  Transmittance: min={T.min().item():.3f}, max={T.max().item():.3f}, mean={T.mean().item():.3f}")
-

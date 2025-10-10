@@ -118,7 +118,7 @@ class Trainer:
         # AMP scaler
         self.scaler = None
         if cfg.precision.use_amp and device.type == 'cuda':
-            self.scaler = torch.cuda.amp.GradScaler()
+            self.scaler = torch.amp.GradScaler('cuda')
 
         self.step_count = 0
 

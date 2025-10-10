@@ -79,8 +79,21 @@ class RayMarcher(nn.Module):
         sigma = sigma_flat.reshape(N, S)
         rgb_feat = rgb_feat_flat.reshape(N, S, -1)
 
-        # Convert features to RGB
-        rgb_steps = rgb_head(rgb_feat.reshape(-1, rgb_feat.shape[-1]), None)
+        # Prepare view directions for view-dependent rendering
+        # Ray directions [N, 3], expand to [N, S, 3]
+        viewdirs = torch.stack([rays.dir_x, rays.dir_y, rays.dir_z], dim=-1)  # [N, 3]
+
+        # Normalize view directions (important for positional encoding)
+        viewdirs = viewdirs / (torch.norm(viewdirs, dim=-1, keepdim=True) + 1e-8)
+
+        viewdirs = viewdirs.unsqueeze(1).expand(N, S, 3)  # [N, S, 3]
+        viewdirs_flat = viewdirs.reshape(-1, 3)  # [N*S, 3]
+
+        # Apply positional encoding to view directions
+        viewdirs_encoded = self._encode_viewdir(viewdirs_flat)  # [N*S, encoded_dim]
+
+        # Convert features to RGB with encoded view directions
+        rgb_steps = rgb_head(rgb_feat.reshape(-1, rgb_feat.shape[-1]), viewdirs_encoded)
         rgb_steps = rgb_steps.reshape(N, S, 3)
 
         # Composite
@@ -192,6 +205,33 @@ class RayMarcher(nn.Module):
         dt = (rays.tmax - rays.tmin).mean().item() / S
 
         return t_samples, dt
+
+    def _encode_viewdir(self, viewdir: torch.Tensor, num_bands: int = 4) -> torch.Tensor:
+        """Apply positional encoding to view directions.
+
+        Args:
+            viewdir: View directions [B, 3]
+            num_bands: Number of frequency bands for PE
+
+        Returns:
+            Encoded view directions [B, 3 + num_bands*3*2]
+        """
+        B = viewdir.shape[0]
+        device = viewdir.device
+
+        # Frequency bands
+        freq_bands = 2.0 ** torch.arange(num_bands, dtype=torch.float32, device=device)  # [L]
+
+        # Include raw input
+        encoded = [viewdir]  # [B, 3]
+
+        # Apply sin and cos for each frequency band
+        for freq in freq_bands:
+            encoded.append(torch.sin(freq * viewdir))  # [B, 3]
+            encoded.append(torch.cos(freq * viewdir))  # [B, 3]
+
+        # Concatenate all encodings
+        return torch.cat(encoded, dim=-1)  # [B, 3 + num_bands*3*2]
 
 
 def render_batch(

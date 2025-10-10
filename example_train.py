@@ -63,8 +63,33 @@ def train_nerf(scene: str = "lego", num_iters: int = 10000):
     rays = make_rays(H, W, cameras, None, device)
     print(f"Generated {rays.N:,} rays")
 
-    # Load ground truth images (simplified: use white for demo)
-    target_rgb = torch.ones(rays.N, 3, device=device)
+    # Load ground truth images
+    print("Loading ground truth images...")
+    from ngp_baseline_torch.data_utils import load_nerf_synthetic_images
+    try:
+        images, _ = load_nerf_synthetic_images(scene_path, "train", device)
+        print(f"Loaded {images.shape[0]} images with shape {images.shape[1:3]}")
+
+        # Flatten images to match rays: [N_cameras, H, W, 3] -> [N_cameras * H * W, 3]
+        target_rgb = images.reshape(-1, 3)
+
+        # Verify dimensions match
+        assert target_rgb.shape[0] == rays.N, \
+            f"Ray count {rays.N} doesn't match image pixels {target_rgb.shape[0]}"
+
+        print(f"Target RGB range: [{target_rgb.min():.3f}, {target_rgb.max():.3f}]")
+
+    except Exception as e:
+        print(f"Warning: Could not load images ({e}), using synthetic target")
+        # Fallback: create a simple pattern for testing
+        # Create a gradient pattern instead of all white
+        coords = torch.arange(rays.N, device=device).float() / rays.N
+        target_rgb = torch.stack([
+            coords,
+            1.0 - coords,
+            torch.ones_like(coords) * 0.5
+        ], dim=-1)
+        print("Using synthetic gradient pattern for testing")
 
     # Training loop
     print(f"\nTraining for {num_iters} iterations...")
@@ -111,4 +136,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train_nerf(args.scene, args.iters)
-

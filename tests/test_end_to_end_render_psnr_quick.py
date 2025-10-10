@@ -29,7 +29,7 @@ def test_end_to_end_render_small(device, seed):
     H, W = 32, 32
     pose = torch.eye(4, device=device)
 
-    image = render_image(
+    image, _ = render_image(
         H=H, W=W,
         pose=pose,
         focal=400.0,
@@ -190,15 +190,14 @@ def test_render_consistency(device, seed):
     # Render 1
     seed_everything(seed, deterministic=True)
     encoder1, field1, rgb_head1, _ = create_all(cfg, device)
-    image1 = render_image(H, W, pose, 400.0, 2.0, 6.0,
+    image1, _ = render_image(H, W, pose, 400.0, 2.0, 6.0,
                          encoder1, field1, rgb_head1, cfg, device, chunk_size=128)
 
     # Render 2 with same seed
     seed_everything(seed, deterministic=True)
     encoder2, field2, rgb_head2, _ = create_all(cfg, device)
-    image2 = render_image(H, W, pose, 400.0, 2.0, 6.0,
+    image2, _ = render_image(H, W, pose, 400.0, 2.0, 6.0,
                          encoder2, field2, rgb_head2, cfg, device, chunk_size=128)
 
     # Should be identical
     assert torch.allclose(image1, image2, atol=1e-6)
-

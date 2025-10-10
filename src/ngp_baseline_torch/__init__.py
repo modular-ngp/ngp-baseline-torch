@@ -16,6 +16,7 @@ from . import loss
 from . import opt
 from . import runtime
 from . import artifact
+from . import logger
 
 __all__ = [
     'types',
@@ -32,5 +33,5 @@ __all__ = [
     'opt',
     'runtime',
     'artifact',
+    'logger',
 ]
-

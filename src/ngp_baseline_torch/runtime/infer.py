@@ -61,7 +61,7 @@ def render_image(
     device: torch.device,
     chunk_size: int = 4096,
     occupancy_grid: nn.Module | None = None
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, dict]:
     """Render a full image in chunks.
 
     Args:
@@ -77,6 +77,7 @@ def render_image(
 
     Returns:
         Rendered image [H, W, 3]
+        aux: Aggregated auxiliary outputs
     """
     from ..rays import make_rays_single
 
@@ -86,6 +87,7 @@ def render_image(
     # Render in chunks
     N = rays.N
     rgb_chunks = []
+    aux_chunks = []
 
     for i in range(0, N, chunk_size):
         end = min(i + chunk_size, N)
@@ -103,12 +105,24 @@ def render_image(
             mask=rays.mask[i:end] if rays.mask is not None else None
         )
 
-        rgb_chunk, _ = render_batch(ray_chunk, encoder, field, rgb_head, cfg, occupancy_grid)
+        rgb_chunk, aux_chunk = render_batch(ray_chunk, encoder, field, rgb_head, cfg, occupancy_grid)
         rgb_chunks.append(rgb_chunk)
+        aux_chunks.append(aux_chunk)
 
     # Concatenate and reshape
     rgb = torch.cat(rgb_chunks, dim=0)
     rgb = rgb.reshape(H, W, 3)
 
-    return rgb
+    # Aggregate auxiliary outputs
+    aux_aggregated = {}
+    if len(aux_chunks) > 0:
+        # Average numeric values across chunks
+        for key in aux_chunks[0].keys():
+            if key == 'num_steps':
+                # Average number of steps
+                aux_aggregated[key] = sum(aux[key] for aux in aux_chunks) / len(aux_chunks)
+            elif isinstance(aux_chunks[0][key], torch.Tensor):
+                # Concatenate tensors
+                aux_aggregated[key] = torch.cat([aux[key] for aux in aux_chunks], dim=0)
 
+    return rgb, aux_aggregated

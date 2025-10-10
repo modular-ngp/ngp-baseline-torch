@@ -60,7 +60,7 @@ def render_from_checkpoint(checkpoint_dir: str, scene: str = "lego", output_dir:
     for i in range(cameras.N):
         print(f"Rendering view {i+1}/{cameras.N}...", end=' ')
 
-        image = render_image(
+        image, _ = render_image(
             H=cameras.height,
             W=cameras.width,
             pose=cameras.poses[i],
@@ -156,7 +156,7 @@ def render_video_360(checkpoint_dir: str, scene: str = "lego",
 
         # Render
         print(f"Frame {i+1}/{n_frames}...", end=' ')
-        image = render_image(
+        image, _ = render_image(
             H=400, W=400,
             pose=pose_tensor,
             focal=cameras.focal,
@@ -218,4 +218,3 @@ if __name__ == "__main__":
         render_from_checkpoint(args.checkpoint, args.scene, args.output)
     else:
         render_video_360(args.checkpoint, args.scene, args.output, args.frames)
-
